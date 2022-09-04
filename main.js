@@ -37,13 +37,13 @@ const gridHelper = new THREE.GridHelper( size, divisions );
 gridHelper.rotation.x=Math.PI/2; //gets grid oriented in XY axis
 scene.add( gridHelper );
 
-const material = new THREE.MeshStandardMaterial({color:blue, transparent: true, opacity: 0.5})
+const material = new THREE.MeshStandardMaterial({color:blue, transparent: true, opacity: 0.1})
 
-
-var lPnts = [[0,0],[0,5],[3.5,5],[2,2],[5,4.5],[5,0]]
-
+//Base Geometry
+var lPnts = [[0,0],[0,20],[3.5,20],[2,2],[5,4.5],[5,0]]
+//Hole Geometry
 var holePnts = [[0.5,0.5], [1.5,0.5], [1.5,1.5], [0.5,1.5]]
-var holesPnts2 = [[1.0,2.5], [0.5,3.0], [1.0,3.5], [1.5,3.0]]
+var holesPnts2 = [[1.0,2.5], [0.5,3.0], [1.0,15.5], [1.5,3.0]]
 var holesPnts3 = [[2.5,0.5], [3.0,1.0], [3.5,0.5]]
 
 
@@ -105,8 +105,11 @@ function addConcGeo() {
 var lGeo = addConcGeo()[0]
 var concShape = addConcGeo()[1]
 
-console.log(lGeo)
-console.log(concShape)
+lGeo.computeBoundingSphere()
+var center = [lGeo.boundingSphere.center.x, lGeo.boundingSphere.center.y] 
+var radius = lGeo.boundingSphere.radius
+
+
 
 class Polygon {
   constructor (baseGeo, baseShape) {
@@ -127,7 +130,6 @@ class Polygon {
       for (let i = 0, len = hole.curves.length; i < len; i++) {
         this.holePolyXY.push([hole.curves[i].v1.x, hole.curves[i].v1.y])
       }
-      
       this.holesPolyXY.push(this.holePolyXY)
       this.holePolyXY = []
     }
@@ -234,28 +236,13 @@ function ray_casting(point, testPoly, holePolys) {
       }
     } 
   }
-  //even number of intercepts is outside of polygon -> false, odd number of intercepts is inside polygon -> true
-  // if (count % 2 == 0 && holeCount % 2 == 0 ) {
-  //   return holeCount
-  // }    
-  // else {  
-  //   return count
-  // }
-  //if ((count % 2 == 1 && holeCount % 2 == 1) || count == 0 ) {
-  if (count % 2 == 0 || count == 0 ) {
-    return [false, count, holeCount]
-  }
-  else if (holeCount % 2 == 1) {
+  if ((count+holeCount) % 2 == 0  || count == 0 ) {
     return [false, count, holeCount]
   }
   else {
     return [true, count, holeCount]
   }
 }
-
-
-
-
 
 function addPoint (point, true_false) {
   if (true_false[0] == true) {
@@ -274,40 +261,173 @@ function addPoint (point, true_false) {
   }
 }
 
-function showPoint(point) {
-  var dotGeometry = new THREE.BufferGeometry();
-  dotGeometry.setAttribute( 'position', new THREE.Float32BufferAttribute( [point[0],point[1],0], 3 ) );
-  var dotMaterial = new THREE.PointsMaterial( { size: 0.2, color: green } );
-  var dot = new THREE.Points( dotGeometry, dotMaterial );
-  scene.add( dot );
+// Generates Points around the bounding sphere of the three js object.
+function generateCirclePnts(center, radius, minSize) {
+  var nCircles = Math.round(radius/minSize)
+  var stepSize = radius/nCircles
+  var createdPnts = []
+  createdPnts.push[center[0], center[1]]
+  for (let i = 0; i < nCircles; i++) {
+    var tempRadius = (i+1)*stepSize
+    var totalLength= Math.PI * 2 * tempRadius
+    var nPoints = Math.round(totalLength/minSize)
+    var thetaStep = 2*Math.PI/nPoints
+    for (let j = 0; j < nPoints; j++) {
+      createdPnts.push([Math.cos(thetaStep*j)*tempRadius+center[0], Math.sin(thetaStep*j)*tempRadius+center[1]])
+    }
+  }
+  return createdPnts
 }
 
-function generatePoints() {
-  var pnt = [Math.random()*5, Math.random()*5]
+//Generate points around boundary and holes
+function generateBoundaryPnts(boundary, holes, minSize) {
+  var boudaryPnts = []
+  for (let i = 0; i < boundary.length; i++) {
+    if (i == boundary.length-1) {
+      var length = ((boundary[i][1]-boundary[0][1])**2+(boundary[i][0]-boundary[0][0])**2)**0.5
+      var nPoints = Math.round(length/minSize)
+      var step = length/nPoints
+      var vector = [(boundary[i][0]-boundary[0][0])/length, (boundary[i][1]-boundary[0][1])/length]
+      for (let j = 0; j < nPoints; j++) {
+        var x = boundary[i][0]-vector[0]*j*step
+        var y = boundary[i][1]-vector[1]*j*step
+        boudaryPnts.push([boundary[i][0]-vector[0]*j*step, boundary[i][1]-vector[1]*j*step])
+      }
+    }
+    else {
+      var length = ((boundary[i][1]-boundary[i+1][1])**2+(boundary[i][0]-boundary[i+1][0])**2)**0.5
+      var nPoints = Math.round(length/minSize)
+      var step = length/nPoints
+      var vector = [(boundary[i][0]-boundary[i+1][0])/length, (boundary[i][1]-boundary[i+1][1])/length]
+      for (let j = 0; j < nPoints; j++) {
+        boudaryPnts.push([boundary[i][0]-vector[0]*j*step, boundary[i][1]-vector[1]*j*step])
+      }
+    }
+  }
+  //creates boudnaries around holes
+  var holePnts = []
+  for (var hole of holes) {
+    for (let i = 0; i < hole.length; i++) {
+      if (i == hole.length-1) {
+        var length = ((hole[i][1]-hole[0][1])**2+(hole[i][0]-hole[0][0])**2)**0.5
+        var nPoints = Math.round(length/minSize)
+        var step = length/nPoints
+        var vector = [(hole[i][0]-hole[0][0])/length, (hole[i][1]-hole[0][1])/length]
+        for (let j = 0; j < nPoints; j++) {
+          var x = hole[i][0]-vector[0]*j*step
+          var y = hole[i][1]-vector[1]*j*step
+          holePnts.push([hole[i][0]-vector[0]*j*step, hole[i][1]-vector[1]*j*step])
+        }
+      }
+      else {
+        var length = ((hole[i][1]-hole[i+1][1])**2+(hole[i][0]-hole[i+1][0])**2)**0.5
+        var nPoints = Math.round(length/minSize)
+        var step = length/nPoints
+        var vector = [(hole[i][0]-hole[i+1][0])/length, (hole[i][1]-hole[i+1][1])/length]
+        for (let j = 0; j < nPoints; j++) {
+          holePnts.push([hole[i][0]-vector[0]*j*step, hole[i][1]-vector[1]*j*step])
+        }
+      }
+    }
+  }
+  return [boudaryPnts, holePnts]
+}
 
-  return pnt
+var boundaryPnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 0.5)[0]
+var holePnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 0.5)[1]
+var circlePnts = generateCirclePnts(center,radius,0.5)
+
+
+
+var i = 0
+var generatedPnts = []
+for (var circlePnt of circlePnts) {
+  var TF = ray_casting(circlePnt,concPoly.basePolyXY ,concPoly.holesPolyXY)
+  
+  
+  if (TF[0] == true) {
+
+    generatedPnts.push(circlePnt)
+    console.log(i)
+  }
+  console.log(TF)
+}
+
+console.log(generatedPnts)
+
+var x = ray_casting(circlePnts[4],concPoly.basePolyXY ,concPoly.holesPolyXY)
+
+//generates all of the points to feed into dealunotr function
+function geneterateDelauntor(boundaryPnts, holePnts, generatedPnts) {
+  var combinedPnts = boundaryPnts.concat( holePnts, generatedPnts)
+  XYlist = []
+  for (var combinedPnt of combinedPnts) {
+    XYlist.push([combinedPnt[0], combinedPnt[1]])
+  }
+  return XYlist
+}
+
+var XYlist = geneterateDelauntor(boundaryPnts, holePnts, generatedPnts)
+var delaunay = Delaunator.from(XYlist);
+
+
+function drawTriangles (triangles, XYlist) {
+  var positionTri = []
+  for (let i = 0; i < triangles.length; i += 3) {
+    positionTri.push([
+      XYlist[triangles[i]],
+      XYlist[triangles[i + 1]],
+      XYlist[triangles[i + 2]]
+      ]);
+  }
+  return positionTri
+}
+//note order matters!!!, had to go 2, 1, 0
+function drawTrianglesThree (positionTri) {
+  for (let i = 0; i < positionTri.length-1; i++) {
+    var geometry = new THREE.BufferGeometry();
+    var vertices = new Float32Array (
+      [positionTri[i][2][0], positionTri[i][2][1], 0,
+      positionTri[i][1][0], positionTri[i][1][1], 0,
+      positionTri[i][0][0], positionTri[i][0][1], 0,
+    ]
+    )
+    geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+    const material = new THREE.MeshStandardMaterial( { color: red, wireframe: true } );
+    const mesh = new THREE.Mesh( geometry, material );
+    scene.add(mesh)
+    }
+   }
+
+var triangleXY = drawTriangles(delaunay.triangles, XYlist) 
+drawTrianglesThree(triangleXY)
+
+
+
+
+//Plots the generated circle points, green in, red out
+for (var circlePnt of circlePnts) {
+ addPoint(circlePnt,ray_casting(circlePnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
+}
+
+//Plots the generated boundary points, green in, red out
+for (var boundaryPnt of boundaryPnts) {
+  addPoint(boundaryPnt,ray_casting(boundaryPnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
+}
+
+//Plots the generated hole points, green in, red out
+for (var holePnt of holePnts) {
+  addPoint(holePnt,ray_casting(holePnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
 }
 
 
-for (let i = 0; i<100; i++) {
-  var pnt = generatePoints()
-  addPoint(pnt,ray_casting(pnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
-}
-var x = generatePoints()
-console.log(x)
 
 camera.position.z = 10
 const controls = new OrbitControls(camera, renderer.domElement)
 
 
-
 function animate() {
   requestAnimationFrame(animate)
   renderer.render(scene,camera)
-  //mesh.rotation.x += 0.01
-  //mesh.rotation.y += 0.01
 }
-
-
-
 animate()
