@@ -40,13 +40,52 @@ scene.add( gridHelper );
 const material = new THREE.MeshStandardMaterial({color:blue, transparent: true, opacity: 0.1})
 
 //Base Geometry
-var lPnts = [[0,0],[0,20],[3.5,20],[2,2],[5,4.5],[5,0]]
+var lPnts = [[-24,-24],[24,-24],[24,24],[-24,24]]
 //Hole Geometry
-var holePnts = [[0.5,0.5], [1.5,0.5], [1.5,1.5], [0.5,1.5]]
-var holesPnts2 = [[1.0,2.5], [0.5,3.0], [1.0,15.5], [1.5,3.0]]
-var holesPnts3 = [[2.5,0.5], [3.0,1.0], [3.5,0.5]]
+var holePnts = [[-18,-18], [18,-18], [18,18], [-18,18]]
+//var holesPnts2 = [[1.0,2.5], [0.5,3.0], [1.0,15.5], [1.5,3.0]]
+//var holesPnts3 = [[2.5,0.5], [3.0,1.0], [3.5,0.5]]
 
 
+var rebarPnts = [[-21,21], [21,21], [-21,-21], [21,-21]]
+
+//circle for the rebar
+const sprite = new THREE.TextureLoader().load( 'disc.png' );
+
+var rebarDia = {
+  3: 0.375,
+  4: 0.5,
+  5: 0.625,
+  6: 0.75,
+  7: 0.875,
+  8: 1.0,
+  9: 1.128,
+  10: 1.27,
+  11: 1.41,
+  14: 1.693,
+  18: 2.257
+}
+
+
+//add a new material for each point
+function addRebar(rebarPnts) {
+  var X1 = rebarPnts[0]
+  var Y1 = rebarPnts[1]
+  var barDia = 11
+  var tempDotGeo = new THREE.BufferGeometry();
+  tempDotGeo.setAttribute( 'position', new THREE.Float32BufferAttribute( [X1,Y1,0], 3 ) );
+  var selectedDotMaterial = new THREE.PointsMaterial( { size: rebarDia[barDia], sizeAttenuation: true, map: sprite, alphaTest: 0.5, transparent: true  } );
+  selectedDotMaterial.color.setHSL( 0.0, 0.0, 0.5 );
+  var tempDot = new THREE.Points( tempDotGeo, selectedDotMaterial );
+  tempDot.isRebar = true
+  tempDot.rebarSize = barDia
+  scene.add( tempDot );
+  console.log(tempDot)
+}
+
+for (var rebar of rebarPnts) {
+  addRebar(rebar)
+}
 
 
 function addHole(holePntsPoly) {
@@ -87,12 +126,12 @@ function addConcGeo() {
     }
   }
   var hole = addHole(holePnts)
-  var hole2 = addHole(holesPnts2)
-  var hole3 = addHole(holesPnts3)
+  //var hole2 = addHole(holesPnts2)
+  //var hole3 = addHole(holesPnts3)
   
   concShape.holes.push(hole)
-  concShape.holes.push(hole2)
-  concShape.holes.push(hole3)
+  //concShape.holes.push(hole2)
+  //concShape.holes.push(hole3)
   //note that segments is just for the outside shape
   const lGeo = new THREE.ShapeGeometry(concShape);
   
@@ -333,9 +372,9 @@ function generateBoundaryPnts(boundary, holes, minSize) {
   return [boudaryPnts, holePnts]
 }
 
-var boundaryPnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 0.5)[0]
-var holePnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 0.5)[1]
-var circlePnts = generateCirclePnts(center,radius,0.5)
+var boundaryPnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 2.0)[0]
+var holePnts = generateBoundaryPnts(concPoly.basePolyXY, concPoly.holesPolyXY, 2.0)[1]
+var circlePnts = generateCirclePnts(center,radius, 2.0)
 
 
 
@@ -343,17 +382,11 @@ var i = 0
 var generatedPnts = []
 for (var circlePnt of circlePnts) {
   var TF = ray_casting(circlePnt,concPoly.basePolyXY ,concPoly.holesPolyXY)
-  
-  
   if (TF[0] == true) {
-
     generatedPnts.push(circlePnt)
-    console.log(i)
   }
-  console.log(TF)
 }
 
-console.log(generatedPnts)
 
 var x = ray_casting(circlePnts[4],concPoly.basePolyXY ,concPoly.holesPolyXY)
 
@@ -384,41 +417,75 @@ function drawTriangles (triangles, XYlist) {
 }
 //note order matters!!!, had to go 2, 1, 0
 function drawTrianglesThree (positionTri) {
-  for (let i = 0; i < positionTri.length-1; i++) {
+  for (let i = 0; i < positionTri.length; i++) {
     var geometry = new THREE.BufferGeometry();
+    var x1 = positionTri[i][2][0]
+    var y1 = positionTri[i][2][1]
+    var x2 = positionTri[i][1][0]
+    var y2 = positionTri[i][1][1]
+    var x3 = positionTri[i][0][0]
+    var y3 = positionTri[i][0][1]
     var vertices = new Float32Array (
-      [positionTri[i][2][0], positionTri[i][2][1], 0,
-      positionTri[i][1][0], positionTri[i][1][1], 0,
-      positionTri[i][0][0], positionTri[i][0][1], 0,
+      [x1, y1, 0,
+      x2, y2, 0,
+      x3, y3, 0,
     ]
     )
     geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+
+    
     const material = new THREE.MeshStandardMaterial( { color: red, wireframe: true } );
     const mesh = new THREE.Mesh( geometry, material );
-    scene.add(mesh)
+    mesh.area = Math.abs((x1*y2+x2*y3+x3*y1-y1*x2-y2*x3-y3*x1)/2)
+    mesh.centriod = {x : (x1+x2+x3)/3,
+                     y: (y1+y2+y3)/3}
+    //if the centeriod of the triangle is not in the main polygon, remove it from the shape
+    var test = ray_casting([mesh.centriod.x, mesh.centriod.y], concPoly.basePolyXY ,concPoly.holesPolyXY)
+    if (test[0] == true) {
+      scene.add(mesh)
+    } 
     }
    }
 
 var triangleXY = drawTriangles(delaunay.triangles, XYlist) 
 drawTrianglesThree(triangleXY)
 
+var concStressStrain = [[-0.01,-0.01], [-0.003,-4], [-0.002, -4], [0,0]]
+var steelStressStrain = [[0,0], [0.00207, 60], [0.05, 60], [0.09, 0.01]]
 
 
-
-//Plots the generated circle points, green in, red out
-for (var circlePnt of circlePnts) {
- addPoint(circlePnt,ray_casting(circlePnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
+class ConcMat {
+  constructor (stressStrain, conc, DU) {
+    this.stressStrain = stressStrain
+    this.conc = conc
+    this.DU = DU //point where concrete starts to crush
+  }
+  //generates the stress strain function, this may not be super effecient
+    stress(strain) {
+      if (strain < this.stressStrain[0][0]) {
+        return 0;
+      }
+      else if (strain > this.stressStrain[this.stressStrain.length-1][0]) {
+        return 0
+      }
+      else {
+        for (let i = 0; i < this.stressStrain.length-1; i++) {
+          if (strain >= this.stressStrain[i][0] && strain < this.stressStrain[i+1][0]) {
+            return (this.stressStrain[i][1] + ((strain-this.stressStrain[i][0])*(this.stressStrain[i+1][1]-this.stressStrain[i][1])/(this.stressStrain[i+1][0]-this.stressStrain[i][0])))
+          }
+        }
+      }
+    }
 }
 
-//Plots the generated boundary points, green in, red out
-for (var boundaryPnt of boundaryPnts) {
-  addPoint(boundaryPnt,ray_casting(boundaryPnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
-}
 
-//Plots the generated hole points, green in, red out
-for (var holePnt of holePnts) {
-  addPoint(holePnt,ray_casting(holePnt,concPoly.basePolyXY ,concPoly.holesPolyXY))
-}
+var concMaterial = new ConcMat(concStressStrain, true, -0.003)
+
+console.log(concMaterial.stress(-0.0025))
+console.log(concMaterial.stress(-0.008))
+console.log(concMaterial.stress(-0.001))
+console.log(concMaterial.stress(1))
+console.log(concMaterial.stressStrain[concMaterial.stressStrain.length-1])
 
 
 
