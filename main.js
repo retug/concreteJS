@@ -81,12 +81,15 @@ function addRebar(rebarPnts) {
   tempDot.rebarSize = barDia
   scene.add( tempDot );
   console.log(tempDot)
+  return tempDot
 }
 
+var sceneRebar = []
 for (var rebar of rebarPnts) {
-  addRebar(rebar)
+  sceneRebar.push(addRebar(rebar))
 }
 
+console.log(sceneRebar)
 
 function addHole(holePntsPoly) {
   const holeShape = new THREE.Shape();
@@ -417,6 +420,7 @@ function drawTriangles (triangles, XYlist) {
 }
 //note order matters!!!, had to go 2, 1, 0
 function drawTrianglesThree (positionTri) {
+  var concElements = []
   for (let i = 0; i < positionTri.length; i++) {
     var geometry = new THREE.BufferGeometry();
     var x1 = positionTri[i][2][0]
@@ -441,19 +445,22 @@ function drawTrianglesThree (positionTri) {
                      y: (y1+y2+y3)/3}
     //if the centeriod of the triangle is not in the main polygon, remove it from the shape
     var test = ray_casting([mesh.centriod.x, mesh.centriod.y], concPoly.basePolyXY ,concPoly.holesPolyXY)
+    
     if (test[0] == true) {
       scene.add(mesh)
+      concElements.push(mesh)
     } 
     }
+    return concElements
    }
 
 var triangleXY = drawTriangles(delaunay.triangles, XYlist) 
-drawTrianglesThree(triangleXY)
+var concElements = drawTrianglesThree(triangleXY)
 
 var concStressStrain = [[-0.01,-0.01], [-0.003,-4], [-0.002, -4], [0,0]]
 var steelStressStrain = [[0,0], [0.00207, 60], [0.05, 60], [0.09, 0.01]]
 
-
+//  MATERIAL DEFINTION LOCATIONS //
 class ConcMat {
   constructor (stressStrain, conc, DU) {
     this.stressStrain = stressStrain
@@ -515,12 +522,34 @@ class SteelMat {
 
 var steelMaterial = new SteelMat(steelStressStrain, true, 0.05)
 
-console.log("Steel")
-console.log(steelMaterial.stress(0.10))
+// END MATERIAL DEFINITION
 
 
-console.log("Conc")
-console.log(concMaterial.stress(-0.0025))
+
+// GENERATE PM DIAPGRAM, [1,0] is typical bending about X axis
+
+function generatePM(vector, concElements, rebarShapes) {
+  var pureCompression = -0.003
+  let concForce = 0
+  let concArea = 0
+  var steelForce = 0
+  for (var concEle of concElements) {
+    concForce += concMaterial.stress(pureCompression)*concEle.area
+    concArea += concEle.area
+  }
+
+  for (var steelRebar of rebarShapes) {
+    //area times stress(strain)
+    steelForce += rebarDia[steelRebar.rebarSize]*steelMaterial.stress(pureCompression)
+    console.log(steelForce)
+  }
+  console.log("total concrete force =")
+  console.log(concForce)
+  console.log(concArea)
+  console.log(steelForce)
+}
+
+generatePM([1,0], concElements, sceneRebar)
 
 
 
