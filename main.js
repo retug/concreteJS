@@ -470,7 +470,7 @@ class ConcMat {
       }
       else {
         for (let i = 0; i < this.stressStrain.length-1; i++) {
-          if (strain >= this.stressStrain[i][0] && strain < this.stressStrain[i+1][0]) {
+          if (strain >= this.stressStrain[i][0] && strain <= this.stressStrain[i+1][0]) {
             return (this.stressStrain[i][1] + ((strain-this.stressStrain[i][0])*(this.stressStrain[i+1][1]-this.stressStrain[i][1])/(this.stressStrain[i+1][0]-this.stressStrain[i][0])))
           }
         }
@@ -478,14 +478,49 @@ class ConcMat {
     }
 }
 
-
 var concMaterial = new ConcMat(concStressStrain, true, -0.003)
 
+class SteelMat {
+  constructor (stressStrain, conc, DU) {
+    this.stressStrain = stressStrain
+    this.conc = conc
+    this.DU = DU //point where steel loses strength
+  }
+  //generates the stress strain function of a symetric stress strain curve, ie steel
+  steelCurve(strain) {
+    if (Math.abs(strain) < this.stressStrain[0][0]) {
+      return 0;
+    }
+    else if (Math.abs(strain) > this.stressStrain[this.stressStrain.length-1][0]) {
+      return 0
+    }
+    else {
+      for (let i = 0; i < this.stressStrain.length-1; i++) {
+        if (Math.abs(strain) >= this.stressStrain[i][0] && Math.abs(strain) <= this.stressStrain[i+1][0]) {
+          return (this.stressStrain[i][1] + ((Math.abs(strain)-this.stressStrain[i][0])*(this.stressStrain[i+1][1]-this.stressStrain[i][1])/(this.stressStrain[i+1][0]-this.stressStrain[i][0])))
+        }
+      }
+    }
+  }
+  stress(strain) {
+    if (strain < 0) {
+      return -this.steelCurve(strain)
+    }
+    else {
+      return this.steelCurve(strain)
+    }
+  }
+}
+
+
+var steelMaterial = new SteelMat(steelStressStrain, true, 0.05)
+
+console.log("Steel")
+console.log(steelMaterial.stress(0.10))
+
+
+console.log("Conc")
 console.log(concMaterial.stress(-0.0025))
-console.log(concMaterial.stress(-0.008))
-console.log(concMaterial.stress(-0.001))
-console.log(concMaterial.stress(1))
-console.log(concMaterial.stressStrain[concMaterial.stressStrain.length-1])
 
 
 
