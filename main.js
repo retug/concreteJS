@@ -3,6 +3,7 @@ import {OrbitControls} from 'https://unpkg.com/three@0.126.1/examples/jsm/contro
 import { SelectionBox } from 'https://unpkg.com/three@0.126.1/examples/jsm/interactive/SelectionBox.js';
 import { SelectionHelper } from 'https://unpkg.com/three@0.126.1/examples/jsm/interactive/SelectionHelper.js';
 import Delaunator from 'delaunator';
+import Plotly from 'plotly.js-dist'
 
 const scene = new THREE.Scene()
 
@@ -47,7 +48,8 @@ var holePnts = [[-18,-18], [18,-18], [18,18], [-18,18]]
 //var holesPnts3 = [[2.5,0.5], [3.0,1.0], [3.5,0.5]]
 
 
-var rebarPnts = [[-21,2], [21,2], [-21,-21], [21,-21]]
+var rebarPnts = [[-21,21], [21,21], [-21,18], [21,18]]
+//var rebarPnts = []
 
 //circle for the rebar
 const sprite = new THREE.TextureLoader().load( 'disc.png' );
@@ -466,7 +468,12 @@ console.log('your centriod is')
 console.log(concCentriod)
 
 var concStressStrain = [[-0.01,-0.01], [-0.003,-4], [-0.002, -4], [0,0]]
-var steelStressStrain = [[0,0], [0.00207, 60], [0.05, 60], [0.09, 0.01]]
+
+//this is super plastic rebar
+var steelStressStrain = [[0,0], [0.00207, 60], [1, 60], [1.1, 0.01]]
+//this is more relastic rebar
+//var steelStressStrain = [[0,0], [0.00207, 60], [0.05, 60], [0.09, 0.01]]
+
 
 //  MATERIAL DEFINTION LOCATIONS //
 class ConcMat {
@@ -566,19 +573,31 @@ function generateStrains(concShape, rebarShapes,steps) {
   var strainProfileTtoT = []
   var slopeStepTtoT = ((-0.003-(0.025))/(rebarMin-concMax))/(steps-1)
 
+  //from pure tension back to compression failure
+  var strainProfileTtoC = []
+  var slopeStepTtoC = -((-0.003-(0.025))/(rebarMax-concMin))/(steps-1)
+
+  //from pure compression failure to compression failure
+  var strainProfileCtoC = []
+  var slopeStepCtoC = -((-0.003-(0.025))/(concMin-rebarMax))/(steps-1)
+
   for (let i =0; i <= steps-1; i++) {
     //first value is m, next is b
     strainProfileCtoT.push([i*slopeStep, -0.003-(i*slopeStep)*(-concMax)])
     //first value is m, next is b
     strainProfileTtoT.push([slopeStepTtoT*(steps-1-i), 0.025-slopeStepTtoT*(steps-1-i)*-rebarMin])
+    //first value is m, next is b
+    strainProfileTtoC.push([-slopeStepTtoC*i, 0.025-(i*slopeStepTtoC)*(-concMin)])
+    //first value is m, next is b
+    strainProfileCtoC.push([(steps-1-i)*slopeStepCtoC, (-0.003-slopeStepCtoC*-(steps-1-i)*-rebarMax)])
   }
-  var strainProfile = strainProfileCtoT.concat(strainProfileTtoT)
-  
+  var strainProfile = strainProfileCtoT.concat(strainProfileTtoT, strainProfileTtoC, strainProfileCtoC)
+  console.log(strainProfile)
   return strainProfile
 }
 
 //lPnts is the base concrete shape, [[x,y ],[x1,y1]]
-var slopes = generateStrains(lPnts, sceneRebar,50)
+var slopes = generateStrains(lPnts, sceneRebar,100)
 console.log(slopes)
 
 //this should be called strain function
@@ -620,15 +639,13 @@ function generatePM(vector, concElements, rebarShapes, strainProfiles, concCentr
     var steelMoment = 0
     for (var concEle of concElements) {
       concForce += concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*concEle.area
-      concMoment += concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area*concEle.centriod.y-concCentriod[1])
+      concMoment += -concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area*concEle.centriod.y-concCentriod[1])
     }
   
     for (var steelRebar of rebarShapes) {
       //area times stress(strain)
-      console.log('right here')
-      console.log(steelRebar.geometry.attributes.position.array[1])
       steelForce += rebarDia[steelRebar.rebarSize]*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))
-      steelMoment += rebarDia[steelRebar.rebarSize]*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))*(steelRebar.geometry.attributes.position.array[1]-concCentriod[1])
+      steelMoment += -rebarDia[steelRebar.rebarSize]*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))*(steelRebar.geometry.attributes.position.array[1]-concCentriod[1])
       
     }
     totalForceArray.push(steelForce+concForce)
@@ -639,11 +656,20 @@ function generatePM(vector, concElements, rebarShapes, strainProfiles, concCentr
   console.log(totalForceArray)
   console.log("your total moment is")
   console.log(totalMomentArray)
+  return [totalForceArray, totalMomentArray]
 }
 
-generatePM([1,0], concElements[0], sceneRebar, slopes, concCentriod)
+var momentDia = generatePM([1,0], concElements[0], sceneRebar, slopes, concCentriod)
 
+var trace1 = {
+  x: momentDia[1],
+  y: momentDia[0],
+  mode: 'lines+markers'
+};
 
+var data = [trace1];
+
+Plotly.newPlot('myDiv', data);
 
 camera.position.z = 10
 const controls = new OrbitControls(camera, renderer.domElement)
