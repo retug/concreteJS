@@ -41,14 +41,14 @@ scene.add( gridHelper );
 const material = new THREE.MeshStandardMaterial({color:blue, transparent: true, opacity: 0.1})
 
 //Base Geometry
-var lPnts = [[-24,-24],[24,-24],[24,24],[-24,24]]
+var lPnts = [[0,0],[10,0],[10,10],[0,10]]
 //Hole Geometry
-var holePnts = [[-18,-18], [18,-18], [18,18], [-18,18]]
+var holePnts = [[4.5,4.5], [5.5,4.5], [5.5,5.5], [4.5,5.5]]
 //var holesPnts2 = [[1.0,2.5], [0.5,3.0], [1.0,15.5], [1.5,3.0]]
 //var holesPnts3 = [[2.5,0.5], [3.0,1.0], [3.5,0.5]]
 
 
-var rebarPnts = [[-21,21], [21,21], [-21,18], [21,18]]
+var rebarPnts = [[2,2], [2,8]]
 //var rebarPnts = []
 
 //circle for the rebar
@@ -73,7 +73,7 @@ var rebarDia = {
 function addRebar(rebarPnts) {
   var X1 = rebarPnts[0]
   var Y1 = rebarPnts[1]
-  var barDia = 11
+  var barDia = 7
   var tempDotGeo = new THREE.BufferGeometry();
   tempDotGeo.setAttribute( 'position', new THREE.Float32BufferAttribute( [X1,Y1,0], 3 ) );
   var selectedDotMaterial = new THREE.PointsMaterial( { size: rebarDia[barDia], sizeAttenuation: true, map: sprite, alphaTest: 0.5, transparent: true  } );
@@ -143,6 +143,8 @@ function addConcGeo() {
   
   const mesh = new THREE.Mesh( lGeo, material ) ;
   scene.add( mesh );
+  console.log('your shpae is here')
+  console.log(lGeo)
   return [lGeo, concShape]
 }
 
@@ -425,6 +427,7 @@ function drawTrianglesThree (positionTri) {
   var concElements = []
   var concCentriodX = 0
   var concCentriodY = 0
+  var area = 0
   for (let i = 0; i < positionTri.length; i++) {
     var geometry = new THREE.BufferGeometry();
     var x1 = positionTri[i][2][0]
@@ -449,25 +452,40 @@ function drawTrianglesThree (positionTri) {
                      y: (y1+y2+y3)/3}
     //if the centeriod of the triangle is not in the main polygon, remove it from the shape
     var test = ray_casting([mesh.centriod.x, mesh.centriod.y], concPoly.basePolyXY ,concPoly.holesPolyXY)
+    // console.log('area is')
+    // console.log(mesh.area)
+    // console.log('centriod is')
+    // console.log(mesh.centriod)
+
     
     if (test[0] == true) {
       scene.add(mesh)
+
       concElements.push(mesh)
+      area += mesh.area 
       concCentriodX += mesh.area * mesh.centriod.x
-      concCentriodY += mesh.area * mesh.centriod.x
-    } 
+      //this was updated
+      concCentriodY += mesh.area * mesh.centriod.y
+    }
+
   }
-  return [concElements, [concCentriodX,concCentriodY]]
+  return [concElements, [concCentriodX/area,concCentriodY/area]]
 }
 
 var triangleXY = drawTriangles(delaunay.triangles, XYlist) 
 var concElements = drawTrianglesThree(triangleXY)
 var concCentriod =  concElements[1]
 
+
 console.log('your centriod is')
 console.log(concCentriod)
 
-var concStressStrain = [[-0.01,-0.01], [-0.003,-4], [-0.002, -4], [0,0]]
+
+
+
+//var concStressStrain = [[-0.01,-0.01], [-0.003,-4], [-0.002, -4], [0,0]]
+
+var concStressStrain = [[-0.01,-0.01], [-0.01,-4], [-0.002, -4], [0,0]]
 
 //this is super plastic rebar
 var steelStressStrain = [[0,0], [0.00207, 60], [1, 60], [1.1, 0.01]]
@@ -561,8 +579,16 @@ function generateStrains(concShape, rebarShapes,steps) {
   var concMin = Math.min(...pointLocations)
   console.log("concMax")
   console.log(concMax)
+  console.log("concMin")
+  console.log(concMin)
+  
+  
+  console.log('rebar Max')
+  console.log(rebarMax)
   console.log('rebar min')
   console.log(rebarMin)
+
+
 
   //generate an array of functions for the the PM diagram to loop over
   //from pure  compression to tension failure
@@ -591,7 +617,9 @@ function generateStrains(concShape, rebarShapes,steps) {
     //first value is m, next is b
     strainProfileCtoC.push([(steps-1-i)*slopeStepCtoC, (-0.003-slopeStepCtoC*-(steps-1-i)*-rebarMax)])
   }
-  var strainProfile = strainProfileCtoT.concat(strainProfileTtoT, strainProfileTtoC, strainProfileCtoC)
+  //var strainProfile = strainProfileCtoT.concat(strainProfileTtoT, strainProfileTtoC, strainProfileCtoC)
+  var strainProfile = strainProfileCtoT.concat(strainProfileTtoT)
+
   console.log(strainProfile)
   return strainProfile
 }
@@ -608,24 +636,38 @@ function strainFunction(m, x, b) {
 // GENERATE PM DIAPGRAM, [1,0] is typical bending about X axis
 function generatePM(vector, concElements, rebarShapes, strainProfiles, concCentriod) {
   var pureCompression = -0.003
-  let concForce = 0
-  let concArea = 0
-  var steelForce = 0
+  let concForce2 = 0
+  let concArea2 = 0
+  var concMoment2 = 0
+  var steelForce2 = 0
+  var steelMoment2 = 0
 
   for (var concEle of concElements) {
-    concForce += concMaterial.stress(pureCompression)*concEle.area
-    concArea += concEle.area
+    
+    concForce2 += concMaterial.stress(pureCompression)*concEle.area
+    concArea2 += concEle.area
+    concMoment2 += concMaterial.stress(pureCompression)*concEle.area*(concEle.centriod.y-concCentriod[1])
+    
   }
 
   for (var steelRebar of rebarShapes) {
     //area times stress(strain)
-    steelForce += rebarDia[steelRebar.rebarSize]*steelMaterial.stress(pureCompression)
-    console.log(steelForce)
+    steelForce2 += Math.PI/4*rebarDia[steelRebar.rebarSize]**2*steelMaterial.stress(pureCompression)
+    steelMoment2 += Math.PI/4*rebarDia[steelRebar.rebarSize]**2*steelMaterial.stress(pureCompression)*(steelRebar.geometry.attributes.position.array[1]-concCentriod[1])
+    console.log(steelForce2)
   }
   console.log("total concrete force =")
-  console.log(concForce)
-  console.log(concArea)
-  console.log(steelForce)
+  console.log(concForce2)
+  console.log("concrete area")
+  console.log(concArea2)
+  console.log('steel force')
+  console.log(steelForce2)
+
+  console.log('conc moment')
+  console.log(concMoment2)
+  console.log('steel moment')
+  console.log(steelMoment2)
+  
 
   var values = []
   let totalForceArray = []
@@ -639,37 +681,91 @@ function generatePM(vector, concElements, rebarShapes, strainProfiles, concCentr
     var steelMoment = 0
     for (var concEle of concElements) {
       concForce += concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*concEle.area
-      concMoment += -concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area*concEle.centriod.y-concCentriod[1])
+      //concMoment += -concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area*concEle.centriod.y-strainProfile[1])
+      //concMoment += -concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area)*(concEle.centriod.y-concCentriod[1])
+      concMoment += -concMaterial.stress(strainFunction(strainProfile[0],concEle.centriod.y, strainProfile[1]))*(concEle.area)*(concEle.centriod.y-strainProfile[1])
+
     }
   
     for (var steelRebar of rebarShapes) {
       //area times stress(strain)
-      steelForce += rebarDia[steelRebar.rebarSize]*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))
-      steelMoment += -rebarDia[steelRebar.rebarSize]*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))*(steelRebar.geometry.attributes.position.array[1]-concCentriod[1])
+      // this has been updated
+      steelForce += Math.PI/4*(rebarDia[steelRebar.rebarSize])**2*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))
+
+      steelMoment += -Math.PI/4*(rebarDia[steelRebar.rebarSize])**2*steelMaterial.stress(strainFunction(strainProfile[0],steelRebar.geometry.attributes.position.array[1], strainProfile[1]))*(steelRebar.geometry.attributes.position.array[1]-strainProfile[1])
+
       
     }
     totalForceArray.push(steelForce+concForce)
     totalMomentArray.push(steelMoment+concMoment)
     
   }
-  console.log("your total force is")
-  console.log(totalForceArray)
-  console.log("your total moment is")
-  console.log(totalMomentArray)
+  // console.log("your total force is")
+  // console.log(totalForceArray)
+  // console.log("your total moment is")
+  // console.log(totalMomentArray)
   return [totalForceArray, totalMomentArray]
 }
 
 var momentDia = generatePM([1,0], concElements[0], sceneRebar, slopes, concCentriod)
-
+console.log(momentDia)
 var trace1 = {
   x: momentDia[1],
   y: momentDia[0],
   mode: 'lines+markers'
 };
 
+var layout = {
+  xaxis: {
+    title: {
+      text: 'Moment (+ tension in bottom)',
+      font: {
+      }
+    },
+  },
+  yaxis: {
+    title: {
+      text: 'Axial Load (-compression)',
+      font: {
+      }
+    }
+  }
+};
+
+
 var data = [trace1];
 
-Plotly.newPlot('myDiv', data);
+const openModalButtons = document.querySelectorAll('[data-modal-target]')
+const closeModalButtons = document.querySelectorAll('[data-close-button]')
+const overlay = document.getElementById('overlay')
+
+openModalButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const modal = document.querySelector(button.dataset.modalTarget)
+    openModal(modal)
+  })
+})
+
+closeModalButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const modal = button.closest('.modal')
+    closeModal(modal)
+  })
+})
+//Plotly.newPlot('myDiv', data);
+
+function openModal(modal) {
+  if (modal == null) return
+  modal.classList.add('active')
+  Plotly.newPlot('plot', data, layout);
+  overlay.classList.add('active')
+}
+
+function closeModal(modal) {
+  if (modal == null) return
+  modal.classList.remove('active')
+  overlay.classList.remove('active')
+}
 
 camera.position.z = 10
 const controls = new OrbitControls(camera, renderer.domElement)
