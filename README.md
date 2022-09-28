@@ -9,6 +9,7 @@ ThreeJS, Delaunator, Plotly, TailwindCSS
 - - [ ] Phi PM Diagrams
 - [ ] Visualize Stresses over Cross Section
 - [ ] MM Digrams
+- - [ ] Convert from global to local axis
 - [ ] Visualize Fiber Stress Strain Curve
 - [ ] 3d Moment Diagrams
 
