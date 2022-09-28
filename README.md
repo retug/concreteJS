@@ -1,3 +1,3 @@
 # meshingJS
 
-Meshing algorithm development for Javascript
+Html and Javascript to aid in the design of concrete members
