@@ -6,6 +6,7 @@ Uses the following packages:
 ThreeJS, Delaunator, Plotly, TailwindCSS
 
 - [x] PM Diagrams
+- - [ ] Phi PM Diagrams
 - [ ] Visualize Stresses over Cross Section
 - [ ] MM Digrams
 - [ ] Visualize Fiber Stress Strain Curve
